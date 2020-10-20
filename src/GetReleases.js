@@ -4,6 +4,7 @@ import React, { Component } from 'react'
 import ReactTimeAgo from 'react-time-ago'
 
 const octokit = new Octokit();
+var store = require('store')
 const list = [];
 
 class GetReleases extends Component {
@@ -15,7 +16,8 @@ class GetReleases extends Component {
           result: '',
           reposDate: '',
           owner: '',
-          repoName: ''
+          repoName: '',
+          hasViewed: ''
       };
       this.handleChange = this.handleChange.bind(this);
       this.handleSubmit = this.handleSubmit.bind(this);
@@ -23,21 +25,23 @@ class GetReleases extends Component {
   }
 
     componentDidMount() {
-      localStorage.setItem('listOfRepos', list)
-
+      const list = store.get('repos');
     }
 
 
   callApi(owner, repo){
-   octokit.request('GET /repos/{owner}/{repo}', {
+   octokit.request('GET /repos/{owner}/{repo}/commits/master', {
       owner: owner,
       repo: repo
     }).then(
-      (response) => {
-        var date = response.data.updated_at.substring(0,response.data.updated_at.indexOf("-") +6);
-        date =  date.replace(/-/g, "/");
+      (response) => {        
+        var date = response.data.commit.author.date.substring(0,response.data.commit.author.date.indexOf("-") +6);
+        date = date.replace(/-/g, "/");
         this.setState({reposDate : date});
         list.push(this.state);
+        store.clearAll();
+        store.set('repos', list);
+        
       }
     );
 
@@ -51,24 +55,45 @@ class GetReleases extends Component {
        var repo = params.substring(params.indexOf('/') + 1, params.length);
        this.setState({owner: owner});
        this.setState({repoName: repo});
+       this.setState({hasViewed: false});
        this.callApi(owner, repo);
       event.preventDefault();
 
     }
 
+
+    markAsRead(repo){
+        repo.hasViewed = true;
+        console.log("Clicked!");
+    }
+
     getListofRepos(){
+     var savedRepos = store.get('repos')
+     if (savedRepos){
       return(
         <tbody>        
-          {list.map(item => {
+          {savedRepos.map(item => {
+            if(item.hasViewed === false){
           return([
-          <tr>
+          <tr class="table-success" onClick={this.markAsRead(item)}>
             <td>{item.owner}</td>
             <td>{item.repoName}</td>
             <td>{<ReactTimeAgo date={item.reposDate} locale="en-US" timeStyle="round"/>}</td>
           </tr>
-          ])})}
+          ])
+            }else{
+              return([
+                <tr>
+                  <td>{item.owner}</td>
+                  <td>{item.repoName}</td>
+                  <td>{<ReactTimeAgo date={item.reposDate} locale="en-US" timeStyle="round"/>}</td>
+                </tr>
+                ])
+            }
+        })}
         </tbody>
       );
+     }
     }
 
       render () {

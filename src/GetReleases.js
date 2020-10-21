@@ -3,6 +3,8 @@ import './App.css';
 import React, { Component } from 'react'
 import ReactTimeAgo from 'react-time-ago'
 
+
+//API calling to Git and Local Storage
 const octokit = new Octokit();
 var store = require('store')
 const list = [];
@@ -17,13 +19,14 @@ class GetReleases extends Component {
           reposDate: '',
           owner: '',
           repoName: '',
-          hasViewed: ''
+          hasViewed: '',
+          message: '',
       };
       this.handleChange = this.handleChange.bind(this);
       this.handleSubmit = this.handleSubmit.bind(this);
 
   }
-
+    //Load local storage on page load
     componentDidMount() {
       const list = store.get('repos');
     }
@@ -34,13 +37,22 @@ class GetReleases extends Component {
       owner: owner,
       repo: repo
     }).then(
-      (response) => {        
-        var date = response.data.commit.author.date.substring(0,response.data.commit.author.date.indexOf("-") +6);
+      (response) => {    
+        //Get time and Date (For some reason the deafult time for Git's API is in GMT time, couldn't find out how to change it)
+        var time = response.data.commit.author.date.substr(response.data.commit.author.date.length - 9);
+        time = time.substr(0, time.length - 1);
+        var date = response.data.commit.author.date.substring(0,response.data.commit.author.date.indexOf("-") + 6);
         date = date.replace(/-/g, "/");
-        this.setState({reposDate : date});
+        date = date + " " + time;
+     
+        this.setState({reposDate : date, message : response.data.commit.message});
+         //Push the state to a temp list 
         list.push(this.state);
+        //Clear the current local Storage 
         store.clearAll();
+        //Add updated State to local Storage
         store.set('repos', list);
+
         
       }
     );
@@ -61,12 +73,28 @@ class GetReleases extends Component {
 
     }
 
-
+    //When the user click on the row it should change the state of the object to
     markAsRead(repo){
         repo.hasViewed = true;
-        console.log("Clicked!");
     }
 
+
+    //Updates all the repos in the table
+    updateRepos(){
+      //Get the Current Repo and store then delete the existing one
+      var currentRepos = store.get('repos');
+      store.clearAll();
+      //Clear temp list
+      list.length = 0;
+      //Call the api on each repo and add it back to the local storage
+      currentRepos.map(item => {
+        this.callApi(item.owner, item.repoName);
+      })
+
+    }
+
+
+    //Gets the list of the repos from the local storage and prints them to the table
     getListofRepos(){
      var savedRepos = store.get('repos')
      if (savedRepos){
@@ -75,10 +103,12 @@ class GetReleases extends Component {
           {savedRepos.map(item => {
             if(item.hasViewed === false){
           return([
+            //markedAsRead doesn't work but ideally you would have a variable on the object and then change the state of it when the user clicks on it
           <tr class="table-success" onClick={this.markAsRead(item)}>
             <td>{item.owner}</td>
             <td>{item.repoName}</td>
-            <td>{<ReactTimeAgo date={item.reposDate} locale="en-US" timeStyle="round"/>}</td>
+            <td>{<ReactTimeAgo date={item.reposDate} locale="en-US" timeStyle="round-minute"/>}</td>
+            <td class="table-danger"> {item.message}</td>
           </tr>
           ])
             }else{
@@ -86,7 +116,8 @@ class GetReleases extends Component {
                 <tr>
                   <td>{item.owner}</td>
                   <td>{item.repoName}</td>
-                  <td>{<ReactTimeAgo date={item.reposDate} locale="en-US" timeStyle="round"/>}</td>
+                  <td>{<ReactTimeAgo date={item.reposDate} locale="en-US" timeStyle="round-minute"/>}</td>
+                  <td> {item.message}</td>
                 </tr>
                 ])
             }
@@ -98,11 +129,11 @@ class GetReleases extends Component {
 
       render () {
         return (
+          
         <div className="App">
+        <button type="button" class="btn btn-primary ml-3" onClick={this.updateRepos.bind(this)}>Update Repos</button>
           <p className="text-secondary">Enter a Github Repo URL</p>
-
         <form onSubmit={this.handleSubmit}>
-
             <label>
                 <input type="text" value={this.state.value} onChange={this.handleChange} className="form-control" />
             </label>
@@ -115,10 +146,12 @@ class GetReleases extends Component {
                 <th scope="col">Owner</th>
                 <th scope="col">Repo</th>
                 <th scope="col">Last Release</th>
+                <th scope="col">Commit Message</th>
               </tr>
             </thead>
                     {this.getListofRepos()}
           </table>
+
         </div>
         )
     }
